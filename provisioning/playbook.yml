@@ -1,5 +1,5 @@
 ---
-# CSRF SeedLab — Ansible Provisioning Playbook
+# Buffer Overflow SeedLab — Ansible Provisioning Playbook
 
 # Step 1: Install common tools on all hosts
 - name: Configure all hosts
@@ -8,7 +8,7 @@
   roles:
     - hosts
 
-# Step 2: Configure the seed (student) machine
+# Step 2: Configure the seed (student) machine: user access + the exercise
 - name: Configure seed machine
   hosts: seed
   become: true
@@ -20,21 +20,14 @@
     - role: seed
     - role: chrony
 
-# Step 3: Configure the server (runs Docker + Elgg)
-- name: Configure server
-  hosts: server
-  become: true
-  roles:
-    - role: server
-
-# Step 4: Setup logging for all hosts and routers
+# Step 3: Setup logging for all hosts and routers
 - name: Setup sandbox logging
   hosts:
     - routers
     - hosts
   become: yes
   vars:
-    sandbox_name: csrf-seedlab
+    sandbox_name: buffer-overflow-seedlab
     central_syslog_ip: 78.128.251.179
   roles:
     - role: sandbox-logging

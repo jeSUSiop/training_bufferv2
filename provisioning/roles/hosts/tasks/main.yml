@@ -1,5 +1,5 @@
 ---
-# Basic configuration of all host devices in the CSRF SeedLab
+# Basic configuration of all host devices in the Buffer Overflow SeedLab
 
 - name: Adding host aliases to /etc/hosts
   loop: "{{ aliases | dict2items }}"

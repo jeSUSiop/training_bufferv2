@@ -1,16 +1,10 @@
-name: csrf-seedlab
+name: buffer-overflow-seedlab
 
 hosts:
   - name: seed
     base_box:
       image: seed
       mgmt_user: ubuntu
-    flavor: m1.medium
-
-  - name: server
-    base_box:
-      image: debian-12-x86_64
-      mgmt_user: debian
     flavor: m1.medium
 
 routers:
@@ -32,10 +26,6 @@ net_mappings:
   - host: seed
     network: lab-switch
     ip: 10.1.30.10
-
-  - host: server
-    network: lab-switch
-    ip: 10.1.30.5
 
 router_mappings:
   - router: router
