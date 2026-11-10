@@ -1,0 +1,136 @@
+{
+  "title": "Software Security: Stack Buffer Overflow Attack Lab",
+  "description": "A small, hands-on cyber range lab. Students exploit a classic 32-bit stack buffer overflow in a setuid-root program to hijack the saved return address, redirect execution into a hidden function, and read a root-only flag.",
+  "prerequisites": [
+    "Basic Linux command line",
+    "Basic C and the idea of the call stack (local variables, saved return address)",
+    "Ability to read hexadecimal addresses"
+  ],
+  "outcomes": [
+    "Explain how writing past a stack buffer overwrites the saved return address.",
+    "Compute the offset from a buffer to the saved return address.",
+    "Overwrite the return address to redirect execution into a chosen function (ret2win).",
+    "Read a privileged file by abusing a setuid-root program.",
+    "Name a compiler/OS mitigation that prevents the attack."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "estimated_duration": 45,
+  "variant_sandboxes": false,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 5,
+      "minimal_possible_solve_time": null,
+      "content": "# Stack Buffer Overflow Attack Lab\n\n## Disclaimer\nThis lab is for **educational purposes only** and runs inside an isolated cyber range sandbox. The techniques must never be used outside it.\n\n## Scenario\nEverything happens on **one machine**: the **seed** workstation (`10.1.30.10`), which is your attacker/working box.\n\nIn `~/bof` there is a small C program, `vuln`, that is installed **setuid-root**. It reads your input into a fixed 64-byte stack buffer **without any bounds check** - a classic stack buffer overflow. The program also contains a function `secret()` that is **never called** on the normal path; it opens the root-only file `/flag` and prints it.\n\nYour mission: overflow the buffer and overwrite the saved **return address** so that the function \"returns\" into `secret()`, which reads the flag for you.\n\n## What you get\n| File (in `~/bof`) | Purpose |\n|---|---|\n| `vuln.c` | the source of the target - read it |\n| `vuln` | the compiled setuid-root binary to exploit |\n| `Makefile` | how it was built (32-bit, no stack protector, no PIE) |\n| `exploit.py` | a payload-builder skeleton to complete |\n\nASLR is disabled on this machine, so the leaked addresses are stable between runs."
+    },
+    {
+      "title": "Access the Sandbox",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 5,
+      "minimal_possible_solve_time": null,
+      "passkey": "start",
+      "cloud_content": "## Connecting to your sandbox\n\n1. In the topology view on the right, right-click **seed** and choose **Open GUI**.\n2. Log in with username **`user`** and password **`Password123`**.\n3. Open a terminal and go to the exercise directory:\n   ```\n   cd ~/bof\n   ls\n   ```\n4. When you are ready, submit **`start`** to begin.\n\nAlternatively you can use SSH - see the [documentation](https://docs.platform.cyberrange.cz/user-guide-advanced/sandboxes/sandbox-access/#user-access).",
+      "local_content": "Local sandbox access: log in to the seed machine as user `user` / `Password123` and `cd ~/bof`."
+    },
+    {
+      "title": "Task 1 - Understand the target",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 10,
+      "minimal_possible_solve_time": null,
+      "answer": "secret",
+      "answer_variable_name": null,
+      "max_score": 4,
+      "content": "Read the source of the target and run it once.\n\n```\ncd ~/bof\ncat vuln.c\n./vuln < /dev/null\n```\n\nWhen you run it, the program prints three things you will need later: the address of a hidden function, the start of the buffer, and the saved frame base (`ebp`). It also prints the formula for the offset to the saved return address.\n\nStudy `vuln.c`: one function is **never called** by the normal control flow, yet it is the function that opens `/flag` and prints it. If you can make the program return into it, you win.\n\n**Flag:** submit the **name of that never-called function** (the one that reads `/flag`).",
+      "solution": "In `vuln.c`, `main()` only calls `vulnerable()`. The function `secret()` is never called on the normal path, but it opens `/flag` and prints it. The answer is `secret`.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "Where to look",
+          "content": "Follow the calls from `main()`. One function in the file is defined but never reached by any call - that is the one that reads `/flag`.",
+          "hint_penalty": 1,
+          "order": 0
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "variant_answers": false,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 2 - Exploit the overflow and capture the flag",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 20,
+      "minimal_possible_solve_time": null,
+      "answer": "flag{r3turn_2_s3cr3t_c4ptured}",
+      "answer_variable_name": null,
+      "max_score": 12,
+      "content": "Now redirect execution into `secret()`.\n\n### 1. Read the leaked values\n```\n./vuln < /dev/null\n```\nNote:\n* `secret() is located at : 0x........`  -> the address you want to jump to\n* `buffer[] starts at     : 0x........`\n* `saved frame base (ebp) : 0x........`\n\n### 2. Compute the offset\nThe saved return address sits just above the saved frame pointer:\n```\noffset = (ebp + 4) - buffer_start\n```\n\n### 3. Fill in and run the exploit\nEdit `exploit.py`, set `SECRET_ADDR` (the `secret()` address) and `OFFSET`, then:\n```\n./exploit.py > payload\n./vuln < payload\n```\nIf the offset is right, `vulnerable()` returns into `secret()`, which prints:\n```\nAccess granted. Flag: flag{...}\n```\n\n**Flag:** submit the value printed after `Flag:` (the contents of `/flag`).",
+      "solution": "Run `./vuln < /dev/null` to read `secret()`'s address, the buffer address and `ebp`. Compute `offset = (ebp + 4) - buffer`. In `exploit.py` set `SECRET_ADDR` to the printed `secret()` address and `OFFSET` to that value, run `./exploit.py > payload`, then `./vuln < payload`. The payload is `OFFSET` padding bytes followed by the 4-byte little-endian address of `secret()`, which overwrites the saved return address. Because `vuln` is setuid-root, `secret()` can read `/flag`. The flag is `flag{r3turn_2_s3cr3t_c4ptured}`.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Finding the offset",
+          "content": "The saved return address is at `ebp + 4`. The distance to overwrite is therefore `(ebp + 4) - buffer_start`, using the two addresses the program prints.",
+          "hint_penalty": 1.5,
+          "order": 0
+        },
+        {
+          "title": "Building the payload",
+          "content": "The payload is `b\"A\" * OFFSET + struct.pack(\"<I\", SECRET_ADDR)`. The address must be 4 bytes, little-endian. `exploit.py` already does this once you set the two values.",
+          "hint_penalty": 2,
+          "order": 1
+        },
+        {
+          "title": "Delivering it",
+          "content": "Write the payload to a file and pipe it in: `./exploit.py > payload` then `./vuln < payload`. The program reads from standard input with `read(0, buffer, 512)`.",
+          "hint_penalty": 2.5,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "variant_answers": false,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 3 - How would you stop this?",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 5,
+      "minimal_possible_solve_time": null,
+      "answer": "-fstack-protector",
+      "answer_variable_name": null,
+      "max_score": 4,
+      "content": "Your attack worked partly because the program was compiled **without the stack canary**. Look at the `Makefile`:\n\n```\nCFLAGS = -m32 -static -fno-stack-protector -no-pie -g -w\n```\n\nThe flag `-fno-stack-protector` *disables* a protection that, when enabled, places a random \"canary\" value just before the saved return address and checks it before returning. If the overflow changed the canary, the program aborts with `*** stack smashing detected ***` before it can ever return into `secret()`.\n\n**Flag:** submit the GCC option (the opposite of `-fno-stack-protector`) that **enables** this stack-canary protection.",
+      "solution": "The stack canary is enabled with `-fstack-protector` (or the stronger `-fstack-protector-all` / `-fstack-protector-strong`). With a canary in place, the overflow is detected and the program aborts before returning, so the ret2win attack fails. The expected answer is `-fstack-protector`.",
+      "solution_penalized": false,
+      "hints": [
+        {
+          "title": "It's the opposite flag",
+          "content": "The Makefile turns the protection OFF with `-fno-stack-protector`. Removing the `no-` gives the option that turns it ON.",
+          "hint_penalty": 1,
+          "order": 0
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "variant_answers": false,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    }
+  ]
+}

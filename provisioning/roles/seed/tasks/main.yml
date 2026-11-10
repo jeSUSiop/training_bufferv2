@@ -1,0 +1,62 @@
+---
+# Seed (student) machine for the Buffer Overflow exercise.
+# Builds a 32-bit, setuid-root vulnerable program locally and plants a
+# root-only flag that can only be read by reaching secret() via the overflow.
+
+- name: Add host aliases to /etc/hosts on the seed machine
+  loop: "{{ aliases | dict2items }}"
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ item.value }} {{ item.key }}"
+
+- name: Install build tools for the exercise (incl. 32-bit support)
+  apt:
+    name:
+      - build-essential
+      - gcc-multilib
+      - gdb
+      - python3
+      - vim
+      - nano
+    state: present
+    update_cache: yes
+
+- name: Disable ASLR now (deterministic addresses for the exercise)
+  command: sysctl -w kernel.randomize_va_space=0
+
+- name: Persist ASLR-off across reboots
+  copy:
+    dest: /etc/sysctl.d/99-disable-aslr.conf
+    content: "kernel.randomize_va_space = 0\n"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy the exercise files to the student's home
+  copy:
+    src: Labsetup/
+    dest: /home/user/bof/
+    owner: user
+    group: user
+    mode: '0755'
+
+- name: Compile the vulnerable program (32-bit, no stack protector, no PIE)
+  command: make
+  args:
+    chdir: /home/user/bof
+    creates: /home/user/bof/vuln
+
+- name: Make the vulnerable program setuid-root
+  file:
+    path: /home/user/bof/vuln
+    owner: root
+    group: root
+    mode: '04755'
+
+- name: Plant the secret flag (readable only by root)
+  copy:
+    dest: /flag
+    content: "flag{r3turn_2_s3cr3t_c4ptured}\n"
+    owner: root
+    group: root
+    mode: '0600'
